@@ -73,6 +73,26 @@ class GraphProcessor:
         if source_vertex_id not in self.vertex_set:
             raise IDNotFoundError(); 
 
+        # fixing internal graph presentation, idea is:
+        # use adjacency list to allow for fast processing of graph: 
+        # processing each vertex v takes O(degree(v)) time
+        # BFS takes O(V+E) wcrt, here E = V - 1, so BFS runs in linear time
+        self.adjacency_list = {v: [] for v in self.vertex_set}
+        self.edge_map = {}          # which vertices an edge connects
+        self.edge_enabled_map = {}  # is the edge enabled?
+        
+        #fill edge_map and edge_enabled_map
+        for i, edge_id in enumerate(edge_ids):
+            u, v = edge_vertex_id_pairs[i]
+            self.edge_map[edge_id] = (u, v)
+            self.edge_enabled_map[edge_id] = edge_enabled[i]
+        
+        #build adjacency list
+        for edge_id, (u, v) in self.edge_map.items():
+            if self.edge_enabled_map[edge_id]:
+                self.adjacency_list[u].append((v, edge_id))
+                self.adjacency_list[v].append((u, edge_id))
+
         # check if graph is fully connected
 
         # check if graph contains cycles

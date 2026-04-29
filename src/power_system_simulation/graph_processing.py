@@ -49,29 +49,29 @@ class GraphProcessor:
         # check vertex_id uniqueness
         # remove possible duplicates, if lengths don't match, duplicates were present
         if len(set(vertex_ids)) != len(vertex_ids): 
-            raise IDNotUniqueError();
+            raise IDNotUniqueError()
 
         # check edge_id uniqueness
         if len(set(edge_ids)) != len(edge_ids):
-            raise IDNotUniqueError();
+            raise IDNotUniqueError()
         
         # check if vertex_id_pairs has the same length as edge_id
         if len(vertex_id_pairs) != len(edge_id):
-            raise InputLengthDoesNotMatchError();
+            raise InputLengthDoesNotMatchError()
 
         # check if edge_vertex_id_pairs contain valid vertex ids.
         self.vertex_set = set(vertex_ids) #use set for O(1) lookups
         for u, v in edge_vertex_id_pairs:
             if u not in self.vertex_set or v not in self.vertex_set:
-                raise IDNotFoundError(); 
+                raise IDNotFoundError()
 
         # check if edge_enabled has same length as edge_ids
         if len(edge_enabled) != len(edge_ids):
-            raise InputLengthDoesNotMatchError();
+            raise InputLengthDoesNotMatchError()
 
         # check if source_vertex_id is a valid vertex id
         if source_vertex_id not in self.vertex_set:
-            raise IDNotFoundError(); 
+            raise IDNotFoundError() 
 
         # fixing internal graph presentation, idea is:
         # use adjacency list to allow for fast processing of graph: 
@@ -94,11 +94,19 @@ class GraphProcessor:
                 self.adjacency_list[v].append((u, edge_id))
 
         # check if graph is fully connected
+        # uses DFS to decide if the graph is fully connected,
+        # if from any arbitrary vertex we can reach all other vertices
+        # then the graph is fully connetced. 
+        visited = set()
+        for i in vertex_ids
 
         # check if graph contains cycles
+        # a tree with v vertices must have v-1 edges, otherwise it is not valid. 
+        enabled_edge_count = sum(self.edge_enabled_map.values())
+        if enabled_edge_count != len(self.vertex_set) - 1:
+            raise GraphCycleError()
         """
             6. The graph should be fully connected. (GraphNotFullyConnectedError)
-            7. The graph should not contain cycles. (GraphCycleError)
         If one certain condition is not satisfied, the error in the parentheses should be raised.
         """
         pass

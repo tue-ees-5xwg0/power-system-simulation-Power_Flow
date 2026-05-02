@@ -56,7 +56,7 @@ class GraphProcessor:
             raise IDNotUniqueError()
         
         # check if vertex_id_pairs has the same length as edge_id
-        if len(vertex_id_pairs) != len(edge_id):
+        if len(edge_vertex_id_pairs) != len(edge_ids):
             raise InputLengthDoesNotMatchError()
 
         # check if edge_vertex_id_pairs contain valid vertex ids.
@@ -73,7 +73,7 @@ class GraphProcessor:
         if source_vertex_id not in self.vertex_set:
             raise IDNotFoundError() 
 
-        # fixing internal graph presentation, idea is:
+        # fixing internal graph presentation; idea is:
         # use adjacency list to allow for fast processing of graph: 
         # processing each vertex v takes O(degree(v)) time
         # BFS takes O(V+E) wcrt, here E = V - 1, so BFS runs in linear time
@@ -94,22 +94,30 @@ class GraphProcessor:
                 self.adjacency_list[v].append((u, edge_id))
 
         # check if graph is fully connected
-        # uses DFS to decide if the graph is fully connected,
+        # uses a simplified version of DFS to decide if the graph is fully connected,
         # if from any arbitrary vertex we can reach all other vertices
         # then the graph is fully connetced. 
         visited = set()
-        for i in vertex_ids
+        stack = [source_vertex_id] #dfs uses stack, we start from source vertex
+        while stack:
+            node = stack.pop()
+
+            if node not in visited:
+                visited.add(node)
+
+                for neighbor, _ in self.adjacency_list[node]:
+                    if neighbor not in visited:
+                        stack.append(neighbor)
+        
+        if len(visited) != len(self.vertex_set):
+            raise GraphNotFullyConnectedError()
 
         # check if graph contains cycles
         # a tree with v vertices must have v-1 edges, otherwise it is not valid. 
         enabled_edge_count = sum(self.edge_enabled_map.values())
         if enabled_edge_count != len(self.vertex_set) - 1:
             raise GraphCycleError()
-        """
-            6. The graph should be fully connected. (GraphNotFullyConnectedError)
-        If one certain condition is not satisfied, the error in the parentheses should be raised.
-        """
-        pass
+        pass #comment out?
 
     def find_downstream_vertices(self, edge_id: int) -> List[int]:
         """
@@ -135,7 +143,14 @@ class GraphProcessor:
         Returns:
             A list of all downstream vertices.
         """
+        # +++++++++++ do i need to call back, or instantiate the adj list here again?
         # put your implementation here
+        # quick error check 
+        if self.edge_enabled_map[edge_id] not true:
+            return([])
+        if edge_id not in self.edge_ids:
+            raise IDNotFoundError()
+
         pass
 
     def find_alternative_edges(self, disabled_edge_id: int) -> List[int]:
@@ -174,4 +189,10 @@ class GraphProcessor:
             A list of alternative edge ids.
         """
         # put your implementation here
+        # quick error check 
+        if disabled_edge_id not in self.edge_id:
+            raise IDNotFoundError()
+
+        if disabled_edge_id not in self.edge_enabled_map:
+            raise EdgeAlreadyDisabledError()
         pass

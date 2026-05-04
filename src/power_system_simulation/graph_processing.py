@@ -146,11 +146,10 @@ class GraphProcessor:
         # +++++++++++ do i need to call back, or instantiate the adj list here again?
         # put your implementation here
         # quick error check 
-        if self.edge_enabled_map[edge_id] not true:
-            return([])
         if edge_id not in self.edge_ids:
             raise IDNotFoundError()
-
+        if not self.edge_enabled_map[edge_id]:
+            return([])
         pass
 
     def find_alternative_edges(self, disabled_edge_id: int) -> List[int]:

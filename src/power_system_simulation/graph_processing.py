@@ -5,7 +5,7 @@ We define a graph processor class with some function skeletons.
 """
 
 from typing import List, Tuple
-
+from collections import deque 
 
 class IDNotFoundError(Exception):
     pass
@@ -80,8 +80,8 @@ class GraphProcessor:
         self.adjacency_list = {v: [] for v in self.vertex_set}
         self.edge_map = {}          # which vertices an edge connects
         self.edge_enabled_map = {}  # is the edge enabled?
-        
-        #fill edge_map and edge_enabled_map
+
+        #fill edge_map, edge_enabled_map and distance_from_source
         for i, edge_id in enumerate(edge_ids):
             u, v = edge_vertex_id_pairs[i]
             self.edge_map[edge_id] = (u, v)
@@ -94,22 +94,22 @@ class GraphProcessor:
                 self.adjacency_list[v].append((u, edge_id))
 
         # check if graph is fully connected
-        # uses a simplified version of DFS to decide if the graph is fully connected,
-        # if from any arbitrary vertex we can reach all other vertices
-        # then the graph is fully connetced. 
-        visited = set()
-        stack = [source_vertex_id] #dfs uses stack, we start from source vertex
-        while stack:
-            node = stack.pop()
-
-            if node not in visited:
-                visited.add(node)
-
-                for neighbor, _ in self.adjacency_list[node]:
-                    if neighbor not in visited:
-                        stack.append(neighbor)
+        # uses BFS to decide if the graph is fully connected,
+        # start from source, a vertex is reachable (and graph fully connected), iff it ends up in distance_from_source
+        # works because a vertex ends up in distance_from_source iff it was reachable from the source vertex,
+        # if not then the graph is disconnected. 
+        # also computes distance from source 
+        self.distance_from_source = {source_vertex_id: 0}
+        queue = deque([source_vertex_id]) # bfs uses a queue 
+        while queue:
+            current = queue.popleft()
+            current_distance = self.distance_from_source[current]
+            for neighbor, _ in self.adjacency_list[current]:
+                if neighbor not in self.distance_from_source:
+                    self.distance_from_source[neighbor] = curren_distance + 1
+                    queue.append(neighbor)
         
-        if len(visited) != len(self.vertex_set):
+        if len(self.distance_from_source) != len(self.vertex_set):
             raise GraphNotFullyConnectedError()
 
         # check if graph contains cycles
@@ -145,12 +145,39 @@ class GraphProcessor:
         """
         # +++++++++++ do i need to call back, or instantiate the adj list here again?
         # put your implementation here
-        # quick error check 
-        if edge_id not in self.edge_ids:
+        # quick error check
+        if edge_id not in self.edge_map:
             raise IDNotFoundError()
         if not self.edge_enabled_map[edge_id]:
             return([])
-        pass
+        
+        # safe to now look for downstream vertices
+        # pseudocode
+        # have already created an adj. list
+        # get (u,v) = self.edge_map[edge_id]
+        # keep vertex with max distance from the source as a downstream vertex, e.g. v
+        # run BFS from downstream vertex v, always skipping the queried edge_id when iterating neighbours
+        # return all vertices 
+        downstream_vertices = set()  
+        u, v = self.edge_map[edge_id]
+        if self.distance_from_source[u] > self.distance_from_source[v]:
+            downstream_vertices.add(u)
+            downstream_vertex_current = u
+        else:
+            downstream_vertices.add(v)
+            downstream_vertex_current = v
+        
+        queue = deque([downstream_vertex_current])
+        while queue:
+            downstream_vertex_current = queue.popleft()
+            for neighbor, neighbor_edge_id in self.adjacency_list[downstream_vertex_current]:
+                if neighbor_edge_id == edge_id: # skip the already queuried edge
+                    continue 
+                if neighbor not in downstream_vertices:
+                    queue.append(neighbor)
+                    downstream_vertices.add(neighbor)
+
+        return sorted(downstream_vertices)
 
     def find_alternative_edges(self, disabled_edge_id: int) -> List[int]:
         """

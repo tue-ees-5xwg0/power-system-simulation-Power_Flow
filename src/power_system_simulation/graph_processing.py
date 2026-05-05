@@ -106,7 +106,7 @@ class GraphProcessor:
             current_distance = self.distance_from_source[current]
             for neighbor, _ in self.adjacency_list[current]:
                 if neighbor not in self.distance_from_source:
-                    self.distance_from_source[neighbor] = curren_distance + 1
+                    self.distance_from_source[neighbor] = current_distance + 1
                     queue.append(neighbor)
         
         if len(self.distance_from_source) != len(self.vertex_set):

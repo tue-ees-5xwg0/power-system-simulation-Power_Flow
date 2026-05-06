@@ -4,8 +4,8 @@ This is a skeleton for the graph processing assignment.
 We define a graph processor class with some function skeletons.
 """
 
-from typing import List, Tuple
-from collections import deque 
+from collections import deque
+
 
 class IDNotFoundError(Exception):
     pass
@@ -40,27 +40,27 @@ class GraphProcessor:
 
     def __init__(
         self,
-        vertex_ids: List[int],
-        edge_ids: List[int],
-        edge_vertex_id_pairs: List[Tuple[int, int]],
-        edge_enabled: List[bool],
+        vertex_ids: list[int],
+        edge_ids: list[int],
+        edge_vertex_id_pairs: list[tuple[int, int]],
+        edge_enabled: list[bool],
         source_vertex_id: int,
     ) -> None:
         # check vertex_id uniqueness
         # remove possible duplicates, if lengths don't match, duplicates were present
-        if len(set(vertex_ids)) != len(vertex_ids): 
+        if len(set(vertex_ids)) != len(vertex_ids):
             raise IDNotUniqueError()
 
         # check edge_id uniqueness
         if len(set(edge_ids)) != len(edge_ids):
             raise IDNotUniqueError()
-        
+
         # check if vertex_id_pairs has the same length as edge_id
         if len(edge_vertex_id_pairs) != len(edge_ids):
             raise InputLengthDoesNotMatchError()
 
         # check if edge_vertex_id_pairs contain valid vertex ids.
-        self.vertex_set = set(vertex_ids) #use set for O(1) lookups
+        self.vertex_set = set(vertex_ids)  # use set for O(1) lookups
         for u, v in edge_vertex_id_pairs:
             if u not in self.vertex_set or v not in self.vertex_set:
                 raise IDNotFoundError()
@@ -71,23 +71,24 @@ class GraphProcessor:
 
         # check if source_vertex_id is a valid vertex id
         if source_vertex_id not in self.vertex_set:
-            raise IDNotFoundError() 
+            raise IDNotFoundError()
 
         # fixing internal graph presentation; idea is:
-        # use adjacency list to allow for fast processing of graph: 
+        # use adjacency list to allow for fast processing of graph:
         # processing each vertex v takes O(degree(v)) time
         # BFS takes O(V+E) wcrt, here E = V - 1, so BFS runs in linear time
         self.adjacency_list = {v: [] for v in self.vertex_set}
-        self.edge_map = {}          # which vertices an edge connects
+        self.edge_map = {}  # which vertices an edge connects
         self.edge_enabled_map = {}  # is the edge enabled?
+        self.source_vertex_id = source_vertex_id  # store source vertex for later graph traversals
 
-        #fill edge_map, edge_enabled_map and distance_from_source
+        # fill edge_map, edge_enabled_map and distance_from_source
         for i, edge_id in enumerate(edge_ids):
             u, v = edge_vertex_id_pairs[i]
             self.edge_map[edge_id] = (u, v)
             self.edge_enabled_map[edge_id] = edge_enabled[i]
-        
-        #build adjacency list
+
+        # build adjacency list
         for edge_id, (u, v) in self.edge_map.items():
             if self.edge_enabled_map[edge_id]:
                 self.adjacency_list[u].append((v, edge_id))
@@ -97,10 +98,10 @@ class GraphProcessor:
         # uses BFS to decide if the graph is fully connected,
         # start from source, a vertex is reachable (and graph fully connected), iff it ends up in distance_from_source
         # works because a vertex ends up in distance_from_source iff it was reachable from the source vertex,
-        # if not then the graph is disconnected. 
-        # also computes distance from source 
+        # if not then the graph is disconnected.
+        # also computes distance from source
         self.distance_from_source = {source_vertex_id: 0}
-        queue = deque([source_vertex_id]) # bfs uses a queue 
+        queue = deque([source_vertex_id])  # bfs uses a queue
         while queue:
             current = queue.popleft()
             current_distance = self.distance_from_source[current]
@@ -108,18 +109,18 @@ class GraphProcessor:
                 if neighbor not in self.distance_from_source:
                     self.distance_from_source[neighbor] = current_distance + 1
                     queue.append(neighbor)
-        
+
         if len(self.distance_from_source) != len(self.vertex_set):
             raise GraphNotFullyConnectedError()
 
         # check if graph contains cycles
-        # a tree with v vertices must have v-1 edges, otherwise it is not valid. 
+        # a tree with v vertices must have v-1 edges, otherwise it is not valid.
         enabled_edge_count = sum(self.edge_enabled_map.values())
         if enabled_edge_count != len(self.vertex_set) - 1:
             raise GraphCycleError()
-        pass #comment out?
 
-    def find_downstream_vertices(self, edge_id: int) -> List[int]:
+    def find_downstream_vertices(self, edge_id: int) -> list[int]:
+        # This version only works for trees and not meshes
         """
         Given an edge id, return all the vertices which are in the downstream of the edge,
             with respect to the source vertex.
@@ -149,16 +150,16 @@ class GraphProcessor:
         if edge_id not in self.edge_map:
             raise IDNotFoundError()
         if not self.edge_enabled_map[edge_id]:
-            return([])
-        
+            return []
+
         # safe to now look for downstream vertices
         # pseudocode
         # have already created an adj. list
         # get (u,v) = self.edge_map[edge_id]
         # keep vertex with max distance from the source as a downstream vertex, e.g. v
         # run BFS from downstream vertex v, always skipping the queried edge_id when iterating neighbours
-        # return all vertices 
-        downstream_vertices = set()  
+        # return all vertices
+        downstream_vertices = set()
         u, v = self.edge_map[edge_id]
         if self.distance_from_source[u] > self.distance_from_source[v]:
             downstream_vertices.add(u)
@@ -166,20 +167,57 @@ class GraphProcessor:
         else:
             downstream_vertices.add(v)
             downstream_vertex_current = v
-        
+
         queue = deque([downstream_vertex_current])
         while queue:
             downstream_vertex_current = queue.popleft()
             for neighbor, neighbor_edge_id in self.adjacency_list[downstream_vertex_current]:
-                if neighbor_edge_id == edge_id: # skip the already queuried edge
-                    continue 
+                if neighbor_edge_id == edge_id:  # skip the already queuried edge
+                    continue
                 if neighbor not in downstream_vertices:
                     queue.append(neighbor)
                     downstream_vertices.add(neighbor)
 
         return sorted(downstream_vertices)
 
-    def find_alternative_edges(self, disabled_edge_id: int) -> List[int]:
+    def find_downstream_vertices_universal(self, edge_id: int) -> list[int]:
+        # This version works for BOTH trees and meshes.
+        # With the current GraphCycleError check, the graph will always be a tree tho
+        # error check
+        if edge_id not in self.edge_map:
+            raise IDNotFoundError()
+
+        if not self.edge_enabled_map[edge_id]:
+            return []
+
+        # BFS from source, ignoring queried edge
+        # reachable vertices remain connected to the source
+        reachable_from_source = set()
+        queue = deque([self.source_vertex_id])
+
+        while queue:
+            current = queue.popleft()
+
+            # skip already visited vertices
+            if current in reachable_from_source:
+                continue
+
+            reachable_from_source.add(current)
+
+            for neighbor, neighbor_edge_id in self.adjacency_list[current]:
+                # pretend we remove queried edge
+                if neighbor_edge_id == edge_id:
+                    continue
+
+                # continue BFS
+                if neighbor not in reachable_from_source:
+                    queue.append(neighbor)
+
+        # vertices not reachable from source are downstream
+        downstream_vertices = self.vertex_set - reachable_from_source
+        return sorted(downstream_vertices)
+
+    def find_alternative_edges(self, disabled_edge_id: int) -> list[int]:
         """
         Given an enabled edge, do the following analysis:
             If the edge is going to be disabled,
@@ -215,10 +253,53 @@ class GraphProcessor:
             A list of alternative edge ids.
         """
         # put your implementation here
-        # quick error check 
-        if disabled_edge_id not in self.edge_id:
+        # verify queried edge exists
+        if disabled_edge_id not in self.edge_map:
             raise IDNotFoundError()
 
-        if disabled_edge_id not in self.edge_enabled_map:
+        # queried edge must currently be enabled
+        if not self.edge_enabled_map[disabled_edge_id]:
             raise EdgeAlreadyDisabledError()
-        pass
+
+        # get the two vertices connected by the edge that will be disabled
+        u, _v = self.edge_map[disabled_edge_id]
+
+        # BFS from one side of the removed edge (finds one of the two components created by disabling the edge)
+        component_a = set()
+        queue = deque([u])
+
+        while queue:
+            current = queue.popleft()
+
+            # skip already visited vertices
+            if current in component_a:
+                continue
+
+            component_a.add(current)
+
+            for neighbor, neighbor_edge_id in self.adjacency_list[current]:
+                # pretend we remove queried edge
+                if neighbor_edge_id == disabled_edge_id:
+                    continue
+
+                # continue BFS through enabled edges
+                if neighbor not in component_a:
+                    queue.append(neighbor)
+
+        # all remaining vertices belong to the other component
+        component_b = self.vertex_set - component_a
+
+        alternative_edges = []
+
+        # check all currently disabled edges
+        for edge_id, (a, b) in self.edge_map.items():
+            if self.edge_enabled_map[edge_id]:
+                continue
+
+            # a disabled edge is valid if it reconnects the two components
+            connects_components = (a in component_a and b in component_b) or (a in component_b and b in component_a)
+
+            if connects_components:
+                alternative_edges.append(edge_id)
+
+        return sorted(alternative_edges)

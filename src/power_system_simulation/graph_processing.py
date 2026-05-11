@@ -120,7 +120,6 @@ class GraphProcessor:
             raise GraphCycleError()
 
     def find_downstream_vertices(self, edge_id: int) -> list[int]:
-        # This version only works for trees and not meshes
         """
         Given an edge id, return all the vertices which are in the downstream of the edge,
             with respect to the source vertex.
@@ -178,43 +177,6 @@ class GraphProcessor:
                     queue.append(neighbor)
                     downstream_vertices.add(neighbor)
 
-        return sorted(downstream_vertices)
-
-    def find_downstream_vertices_universal(self, edge_id: int) -> list[int]:
-        # This version works for BOTH trees and meshes.
-        # With the current GraphCycleError check, the graph will always be a tree tho
-        # error check
-        if edge_id not in self.edge_map:
-            raise IDNotFoundError()
-
-        if not self.edge_enabled_map[edge_id]:
-            return []
-
-        # BFS from source, ignoring queried edge
-        # reachable vertices remain connected to the source
-        reachable_from_source = set()
-        queue = deque([self.source_vertex_id])
-
-        while queue:
-            current = queue.popleft()
-
-            # skip already visited vertices
-            if current in reachable_from_source:
-                continue
-
-            reachable_from_source.add(current)
-
-            for neighbor, neighbor_edge_id in self.adjacency_list[current]:
-                # pretend we remove queried edge
-                if neighbor_edge_id == edge_id:
-                    continue
-
-                # continue BFS
-                if neighbor not in reachable_from_source:
-                    queue.append(neighbor)
-
-        # vertices not reachable from source are downstream
-        downstream_vertices = self.vertex_set - reachable_from_source
         return sorted(downstream_vertices)
 
     def find_alternative_edges(self, disabled_edge_id: int) -> list[int]:

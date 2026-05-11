@@ -250,44 +250,6 @@ def test_downstream_tree_edge_where_left_endpoint_is_downstream():
     assert gp.find_downstream_vertices(1) == [100]
 
 
-def test_downstream_universal_same_as_tree_for_cut_edge():
-    gp = GraphProcessor(
-        vertex_ids=[0, 2, 4],
-        edge_ids=[1, 3],
-        edge_vertex_id_pairs=[(0, 2), (2, 4)],
-        edge_enabled=[True, True],
-        source_vertex_id=0,
-    )
-
-    assert gp.find_downstream_vertices_universal(1) == [2, 4]
-    assert gp.find_downstream_vertices_universal(3) == [4]
-
-
-def test_downstream_universal_disabled_edge_returns_empty():
-    gp = GraphProcessor(
-        vertex_ids=[0, 1, 2],
-        edge_ids=[10, 11, 12],
-        edge_vertex_id_pairs=[(0, 1), (1, 2), (0, 2)],
-        edge_enabled=[True, True, False],
-        source_vertex_id=0,
-    )
-
-    assert gp.find_downstream_vertices_universal(12) == []
-
-
-def test_downstream_universal_nonexistent_edge_raises_error():
-    gp = GraphProcessor(
-        vertex_ids=[0, 1],
-        edge_ids=[10],
-        edge_vertex_id_pairs=[(0, 1)],
-        edge_enabled=[True],
-        source_vertex_id=0,
-    )
-
-    with pytest.raises(IDNotFoundError):
-        gp.find_downstream_vertices_universal(999)
-
-
 def test_find_alternative_edges_returns_valid_disabled_edge():
     gp = GraphProcessor(
         vertex_ids=[0, 1, 2],

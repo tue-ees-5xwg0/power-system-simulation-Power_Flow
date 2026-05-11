@@ -237,29 +237,19 @@ class GraphProcessor:
         if not self.edge_enabled_map[disabled_edge_id]:
             raise EdgeAlreadyDisabledError()
 
-        # get the two vertices connected by the edge that will be disabled
+        # BFS from one endpoint of the queried edge to find the component it ends up in
+        # after that edge is removed.
         u, _v = self.edge_map[disabled_edge_id]
-
-        # BFS from one side of the removed edge (finds one of the two components created by disabling the edge)
-        component_a = set()
+        component_a = {u}
         queue = deque([u])
 
         while queue:
             current = queue.popleft()
-
-            # skip already visited vertices
-            if current in component_a:
-                continue
-
-            component_a.add(current)
-
             for neighbor, neighbor_edge_id in self.adjacency_list[current]:
-                # pretend we remove queried edge
                 if neighbor_edge_id == disabled_edge_id:
                     continue
-
-                # continue BFS through enabled edges
                 if neighbor not in component_a:
+                    component_a.add(neighbor)
                     queue.append(neighbor)
 
         # all remaining vertices belong to the other component

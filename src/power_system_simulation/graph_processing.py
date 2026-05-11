@@ -1,8 +1,4 @@
-"""
-This is a skeleton for the graph processing assignment.
-
-We define a graph processor class with some function skeletons.
-"""
+"""Graph processing for power network trees: downstream-vertex and alternative-edge analysis."""
 
 from collections import deque
 
@@ -33,9 +29,37 @@ class EdgeAlreadyDisabledError(Exception):
 
 class GraphProcessor:
     """
-    General documentation of this class.
-    You need to describe the purpose of this class and the functions in it.
-    We are using an undirected graph in the processor.
+    Processes an undirected graph representing a power network tree.
+
+    The graph must satisfy the following constraints at construction time:
+      - All vertex IDs and edge IDs must be unique.
+      - Every edge endpoint must refer to a valid vertex ID.
+      - The enabled subgraph must be fully connected (every vertex reachable from the source).
+      - The enabled subgraph must be acyclic (i.e. a spanning tree: exactly n_vertices - 1 enabled edges).
+
+    Internally the graph is stored as an adjacency list for O(V + E) BFS traversals.
+    Distances from the source vertex are pre-computed at construction time and reused by
+    find_downstream_vertices to identify which endpoint of a queried edge is downstream.
+
+    Disabled edges are retained in the data structures so they can be considered as
+    candidates in find_alternative_edges without rebuilding the graph.
+
+    Args:
+        vertex_ids: List of unique integer vertex identifiers.
+        edge_ids: List of unique integer edge identifiers.
+        edge_vertex_id_pairs: List of (u, v) pairs giving the two endpoints of each edge,
+            in the same order as edge_ids.
+        edge_enabled: Boolean list indicating whether each edge is active, in the same
+            order as edge_ids.
+        source_vertex_id: The root vertex from which downstream direction is defined.
+
+    Raises:
+        IDNotUniqueError: If any vertex ID or edge ID appears more than once.
+        InputLengthDoesNotMatchError: If edge_vertex_id_pairs or edge_enabled has a
+            different length than edge_ids.
+        IDNotFoundError: If an edge endpoint or the source vertex is not in vertex_ids.
+        GraphNotFullyConnectedError: If the enabled subgraph is not fully connected.
+        GraphCycleError: If the enabled subgraph contains a cycle.
     """
 
     def __init__(
@@ -143,21 +167,13 @@ class GraphProcessor:
         Returns:
             A list of all downstream vertices.
         """
-        # +++++++++++ do i need to call back, or instantiate the adj list here again?
-        # put your implementation here
-        # quick error check
         if edge_id not in self.edge_map:
             raise IDNotFoundError()
         if not self.edge_enabled_map[edge_id]:
             return []
 
-        # safe to now look for downstream vertices
-        # pseudocode
-        # have already created an adj. list
-        # get (u,v) = self.edge_map[edge_id]
-        # keep vertex with max distance from the source as a downstream vertex, e.g. v
-        # run BFS from downstream vertex v, always skipping the queried edge_id when iterating neighbours
-        # return all vertices
+        # Identify the downstream endpoint as the one farther from the source,
+        # then BFS from there while skipping the queried edge.
         downstream_vertices = set()
         u, v = self.edge_map[edge_id]
         if self.distance_from_source[u] > self.distance_from_source[v]:
@@ -171,7 +187,7 @@ class GraphProcessor:
         while queue:
             downstream_vertex_current = queue.popleft()
             for neighbor, neighbor_edge_id in self.adjacency_list[downstream_vertex_current]:
-                if neighbor_edge_id == edge_id:  # skip the already queuried edge
+                if neighbor_edge_id == edge_id:
                     continue
                 if neighbor not in downstream_vertices:
                     queue.append(neighbor)
@@ -214,8 +230,6 @@ class GraphProcessor:
         Returns:
             A list of alternative edge ids.
         """
-        # put your implementation here
-        # verify queried edge exists
         if disabled_edge_id not in self.edge_map:
             raise IDNotFoundError()
 

@@ -52,3 +52,13 @@ class PowerFlowProcessor:
 
         # Construct PGM using the input data according to power-grid-model API 
         self._Mmodel = PowerGridModel(input_data = pgm_input_data)
+
+        # Create PGM batch update dataset with the active & reactive load profiles
+        shape = self.active_power_profile.shap # gives a tuple of (number of rows, number of columns), needed to init array later
+        load_profile = initialize_array(DatasetType.update, ComponentType.sym_load, shape) # used to allocate empty batch array
+
+        load_profile["id"] = self.active_power_profile.columns.to_numpy()
+        load_profile["p_specified"] = self.active_power_profile.to_numpy()
+        load_profile["q_specified"] = self.reactive_power_profile.to_numpy()
+
+        self.update_pgm_data = {ComponentType.sym_load: load_profile}

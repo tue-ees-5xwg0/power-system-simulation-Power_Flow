@@ -1,7 +1,4 @@
-"""Power grid mcalculation module using power-grid-model."""
-
-from .graph_processing import GraphProcessor
-from .power_flow_processing import PowerFlowProcessor
+"""Power grid calculation module using power-grid-model."""
 
 import numpy as np
 import pandas as pd
@@ -31,12 +28,13 @@ class CalculationNotPerformedError(Exception):
     """Raised when aggregation is requested before run_time_series() has been called."""
     pass
 
-def __init__(
+class PowerFlowProcessor:
+    def __init__(
         self, 
         pgm_input_data, 
         active_power_profile, 
         reactive_power_profile
-):
+    ):
         # First, validate input data using the power-grid-model API
         # assert_valid_input_data raises ValidationException error 
         assert_valid_input_data(input_data = pgm_input_data, calculation_type = CalculationType.power_flow)
@@ -53,4 +51,4 @@ def __init__(
         self.reactive_power_profile = reactive_power_profile
 
         # Construct PGM using the input data according to power-grid-model API 
-        self.PGM_model = PowerGridModel(pgm_input_data)
+        self._Mmodel = PowerGridModel(input_data = pgm_input_data)

@@ -1,5 +1,9 @@
 """Power grid calculation module using power-grid-model."""
 
+#import numpy as np
+from pathlib import Path
+
+import pandas as pd
 from power_grid_model import (
     CalculationMethod,
     CalculationType,
@@ -8,26 +12,61 @@ from power_grid_model import (
     PowerGridModel,
     initialize_array,
 )
+from power_grid_model.utils import json_deserialize_from_file
 from power_grid_model.validation import (
     assert_valid_batch_data,
     assert_valid_input_data,
 )
 
+
+def read_pgm_json(path):
+    """Read a PGM JSON file into PGM input data."""
+    with Path(path).open(encoding="utf-8") as file:
+        return json_deserialize_from_file(Path(path))
+
+def read_load_profile(path):
+    """Read a load profile parquet file into a DataFrame."""
+    return pd.read_parquet(path)
+
+def validate_matching_profiles(active_power_profile, reactive_power_profile):
+    """Validate that active and reactive profiles have matching timestamps and load IDs."""
+    if not active_power_profile.index.equals(reactive_power_profile.index):
+        raise LoadProfilesMismatchError(
+            "Active and reactive profiles have different timestamps."
+        )
+
+    if not active_power_profile.columns.equals(reactive_power_profile.columns):
+        raise LoadProfilesMismatchError(
+            "Active and reactive profiles have different load IDs."
+        )
+
+def create_sym_load_update_data(active_power_profile, reactive_power_profile):
+    """Create a PGM batch update dataset for sym_load profiles."""
+    validate_matching_profiles(active_power_profile, reactive_power_profile)
+
+    load_profile = initialize_array(
+        DatasetType.update,
+        ComponentType.sym_load,
+        active_power_profile.shape,
+    )
+
+    load_profile["id"] = active_power_profile.columns.to_numpy()
+    load_profile["p_specified"] = active_power_profile.to_numpy()
+    load_profile["q_specified"] = reactive_power_profile.to_numpy()
+
+    return {ComponentType.sym_load: load_profile}
+
 # ValidationException error caught by power-grid-model api
 # Raised when invalid input data and when the batch dataset is invalid
 
-
 class LoadProfilesMismatchError(Exception):
     """Raised when the two profiles do not have matching timestamps and/or load IDs."""
-
     pass
 
 
 class CalculationNotPerformedError(Exception):
     """Raised when aggregation is requested before run_time_series() has been called."""
-
     pass
-
 
 class PowerFlowProcessor:
     def __init__(
@@ -38,13 +77,10 @@ class PowerFlowProcessor:
     ):
         # First, validate input data using the power-grid-model API
         # assert_valid_input_data raises ValidationException error
-        assert_valid_input_data(input_data=pgm_input_data, calculation_type=CalculationType.power_flow)
-
-        # Second, raise error in case of not matching timestamps and/or load IDs
-        if not active_power_profile.index.equals(reactive_power_profile.index):
-            raise LoadProfilesMismatchError("Active and reactive profiles have different timestamps.")
-        if not active_power_profile.columns.equals(reactive_power_profile.columns):
-            raise LoadProfilesMismatchError("Active and reactive profiles have different load IDs.")
+        assert_valid_input_data(
+            input_data=pgm_input_data,
+            calculation_type=CalculationType.power_flow,
+        )
 
         # Store input on self so other methods can access them later
         self.pgm_input_data = pgm_input_data
@@ -52,33 +88,53 @@ class PowerFlowProcessor:
         self.reactive_power_profile = reactive_power_profile
 
         # Construct PGM using the input data according to power-grid-model API
-        self.pgm_model = PowerGridModel(input_data=pgm_input_data)
+        self.pgm_model = PowerGridModel(input_data = pgm_input_data)
 
-        # Create PGM batch update dataset with the active & reactive load profiles
-        shape = (
-            self.active_power_profile.shape
-        )  # gives a tuple of (number of rows, number of columns), needed to init array later
-        load_profile = initialize_array(
-            DatasetType.update, ComponentType.sym_load, shape
-        )  # used to allocate empty batch array
-
-        load_profile["id"] = self.active_power_profile.columns.to_numpy()
-        load_profile["p_specified"] = self.active_power_profile.to_numpy()
-        load_profile["q_specified"] = self.reactive_power_profile.to_numpy()
-
-        self.update_pgm_data = {ComponentType.sym_load: load_profile}
+        self.update_pgm_data = create_sym_load_update_data(
+            active_power_profile,
+            reactive_power_profile,
+        )
+        self.output_data = None
 
     def run_time_series(
-        self,
-        calculation_method=CalculationMethod.newton_raphson,  # from workshop we saw it gives correct results
+            self,
+            calculation_method = CalculationMethod.newton_raphson, # from workshop we saw it gives correct results
     ):
         # First, validate input batch data using the power-grid-model API
         # assert_valid_batch_data raises ValidationException error
         assert_valid_batch_data(
-            input_data=self.pgm_input_data, update_data=self.update_pgm_data, calculation_method=calculation_method
+            input_data=self.pgm_input_data,
+            update_data=self.update_pgm_data,
+            calculation_type=CalculationType.power_flow,
         )
         # Running the batch (time series) power flow calculation
-        self.output_data = self.gpm_model.calculate_power_flow(
-            update_data=self.update_pgm_data, calculation_method=calculation_method
+        self.output_data = self.pgm_model.calculate_power_flow(
+            update_data=self.update_pgm_data,
+            calculation_method=calculation_method,
         )
         return self.output_data
+
+    def get_voltage_summary(self):
+        """Aggregate node voltage results per timestamp."""
+        if self.output_data is None:
+            raise CalculationNotPerformedError(
+                "Run run_time_series() before aggregating results."
+            )
+
+        node_results = self.output_data[ComponentType.node]
+        timestamps = self.active_power_profile.index
+        node_ids = node_results["id"][0]
+        voltages = node_results["u_pu"]
+
+        max_indices = voltages.argmax(axis=1)
+        min_indices = voltages.argmin(axis=1)
+
+        return pd.DataFrame(
+            {
+                "Max_Voltage": voltages.max(axis=1),
+                "Max_Voltage_Node": node_ids[max_indices],
+                "Min_Voltage": voltages.min(axis=1),
+                "Min_Voltage_Node": node_ids[min_indices],
+            },
+            index=timestamps,
+        )

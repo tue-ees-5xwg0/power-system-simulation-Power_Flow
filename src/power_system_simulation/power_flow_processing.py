@@ -1,6 +1,5 @@
 """Power grid calculation module using power-grid-model."""
 
-
 from power_grid_model import (
     CalculationMethod,
     CalculationType,

@@ -1,8 +1,8 @@
 """Power grid calculation module using power-grid-model."""
 
-#import numpy as np
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from power_grid_model import (
     CalculationMethod,
@@ -137,4 +137,44 @@ class PowerFlowProcessor:
                 "Min_Voltage_Node": node_ids[min_indices],
             },
             index=timestamps,
+        )
+
+    def get_line_summary(self):
+        """Aggregate line loading and energy loss results per line."""
+        if self.output_data is None:
+            raise CalculationNotPerformedError(
+                "Run run_time_series() before aggregating results."
+            )
+
+        line_results = self.output_data[ComponentType.line]
+        timestamps = self.active_power_profile.index
+
+        line_ids = line_results["id"][0]
+        loading = line_results["loading"]
+
+        power_loss_w = line_results["p_from"] + line_results["p_to"]
+        power_loss_kw = power_loss_w / 1000.0
+
+        elapsed_hours = (
+            timestamps - timestamps[0]
+        ).total_seconds().to_numpy() / 3600.0
+
+        time_steps = np.diff(elapsed_hours)
+        average_loss_kw = 0.5 * (
+            power_loss_kw[:-1] + power_loss_kw[1:]
+        )
+        total_loss_kwh = np.sum(average_loss_kw * time_steps[:, None], axis=0)
+
+        max_indices = loading.argmax(axis=0)
+        min_indices = loading.argmin(axis=0)
+
+        return pd.DataFrame(
+            {
+                "Total_Loss": total_loss_kwh,
+                "Max_Loading": loading.max(axis=0),
+                "Max_Loading_Timestamp": timestamps[max_indices],
+                "Min_Loading": loading.min(axis=0),
+                "Min_Loading_Timestamp": timestamps[min_indices],
+            },
+            index=pd.Index(line_ids, name="Line_ID"),
         )

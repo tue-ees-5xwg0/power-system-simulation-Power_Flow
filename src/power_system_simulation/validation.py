@@ -4,7 +4,7 @@ from power_grid_model import CalculationType, ComponentType
 from power_grid_model.validation import assert_valid_input_data
 
 from power_system_simulation.case import PowerSystemCase
-from power_system_simulation.graph_processing import GraphProcessor
+from power_system_simulation.grid_graph import build_graph_processor
 from power_system_simulation.power_flow_processing import (
     validate_matching_profiles,
 )
@@ -48,6 +48,7 @@ def validate_case(case: PowerSystemCase) -> None:
     _validate_pgm_input(case)
     _validate_source_and_transformer(case)
     _validate_feeder_ids(case)
+    _validate_graph_topology(case)
     _validate_load_profiles(case)
     _validate_ev_profiles(case)
 
@@ -62,10 +63,10 @@ def _validate_pgm_input(case: PowerSystemCase) -> None:
 
 def _validate_source_and_transformer(case: PowerSystemCase) -> None:
     """Validate that the grid contains exactly one source and transformer."""
-    if len(case.input_data[ComponentType.source]) != 1:
+    if len(case.input_data.get(ComponentType.source, [])) != 1:
         raise InvalidSourceError("The grid must contain exactly one source.")
 
-    if len(case.input_data[ComponentType.transformer]) != 1:
+    if len(case.input_data.get(ComponentType.transformer, [])) != 1:
         raise InvalidTransformerError("The grid must contain exactly one transformer.")
 
 
@@ -77,10 +78,10 @@ def _validate_feeder_ids(case: PowerSystemCase) -> None:
         - be a valid line ID
         - start from the transformer LV node
     """
-    lines = case.input_data[ComponentType.line]
+    lines = case.input_data.get(ComponentType.line, [])
     transformer = case.input_data[ComponentType.transformer][0]
 
-    valid_line_ids = set(lines["id"])
+    valid_line_ids = set(lines["id"]) if len(lines) else set()
     transformer_lv_node = transformer["to_node"]
 
     for feeder_id in case.lv_feeder_ids:
@@ -93,56 +94,9 @@ def _validate_feeder_ids(case: PowerSystemCase) -> None:
             raise InvalidFeederError(f"Feeder line {feeder_id} does not start at the transformer LV node.")
 
 
-def _create_graph_processor(case: PowerSystemCase) -> GraphProcessor:
-    """Create a GraphProcessor from PGM input data."""
-    nodes = case.input_data[ComponentType.node]
-    lines = case.input_data[ComponentType.line]
-    transformer = case.input_data[ComponentType.transformer][0]
-
-    vertex_ids = list(nodes["id"])
-
-    edge_ids = []
-    edge_vertex_id_pairs = []
-    edge_enabled = []
-
-    # transformer
-    edge_ids.append(int(transformer["id"]))
-    edge_vertex_id_pairs.append(
-        (
-            int(transformer["from_node"]),
-            int(transformer["to_node"]),
-        )
-    )
-    edge_enabled.append(bool(transformer["from_status"] and transformer["to_status"]))
-
-    # lines
-    for line in lines:
-        edge_ids.append(int(line["id"]))
-        edge_vertex_id_pairs.append(
-            (
-                int(line["from_node"]),
-                int(line["to_node"]),
-            )
-        )
-        edge_enabled.append(bool(line["from_status"] and line["to_status"]))
-
-    source_vertex_id = int(transformer["from_node"])
-
-    return GraphProcessor(
-        vertex_ids=vertex_ids,
-        edge_ids=edge_ids,
-        edge_vertex_id_pairs=edge_vertex_id_pairs,
-        edge_enabled=edge_enabled,
-        source_vertex_id=source_vertex_id,
-    )
-
-
 def _validate_graph_topology(case: PowerSystemCase) -> None:
-    """
-    Validate that the initial network topology is
-    fully connected and contains no cycles.
-    """
-    _create_graph_processor(case)
+    """Check the base grid is fully connected and has no cycles (Assignment 1)."""
+    build_graph_processor(case.input_data)
 
 
 def _validate_load_profiles(case: PowerSystemCase) -> None:
@@ -190,11 +144,3 @@ def _validate_ev_profiles(case: PowerSystemCase) -> None:
 
     if number_of_ev_profiles < number_of_loads:
         raise InvalidEVProfileError("The number of EV profiles must be at least the number of sym_loads.")
-
-
-"""
-Currently missing checks:
-    - fully connected check
-    - cycle check
-Both should use Assignment 1 functionality.
-"""

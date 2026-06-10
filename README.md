@@ -1,6 +1,6 @@
 # power-system-simulation
 
-A Python package developed for the TU/e *5XWG0 Power System Computation and Simulation* course. The package provides tools for graph-based distribution grid analysis, time-series power flow calculations, and low-voltage grid analytics.
+A Python package developed for the TU/e *5XWG0 Power System Computation and Simulation* course by team Power_Flow. The package provides tools for graph-based distribution grid analysis, time-series power flow calculations, and low-voltage grid analytics.
 
 ## Features
 

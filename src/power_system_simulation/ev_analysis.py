@@ -1,10 +1,14 @@
 import math
+
 import numpy as np
 import pandas as pd
 from power_grid_model import ComponentType
+
 from power_system_simulation.case import PowerSystemCase
 from power_system_simulation.grid_graph import build_graph_processor
 from power_system_simulation.power_flow_processing import PowerFlowProcessor
+from power_system_simulation.validation import validate_case
+
 
 # Helper function to determine feeder membership
 # Uses graph functionalities from Assignment 1 (find downstream vertices)
@@ -17,11 +21,16 @@ def _houses_per_feeder(case: PowerSystemCase) -> dict[int, list[int]]:
         downstream_nodes = set(graph.find_downstream_vertices(feeder_id))
         houses = [
             int(load_id)
-            for load_id, node in zip(sym_load["id"], sym_load["node"])
+            for load_id, node in zip(
+                sym_load["id"],
+                sym_load["node"],
+                strict=True,
+            )
             if int(node) in downstream_nodes
         ]
         feeder_to_houses[int(feeder_id)] = houses
     return feeder_to_houses
+
 
 def run_ev_penetration_analysis(
     case: PowerSystemCase,
@@ -29,7 +38,7 @@ def run_ev_penetration_analysis(
     random_seed: int | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    /* General */ 
+    /* General */
     Assign EV charging profiles (randomly) to households and then run a time-series
     power flow calculation.
 
@@ -52,18 +61,25 @@ def run_ev_penetration_analysis(
         houses than the per-feeder EV target, the target is clamped to the
         number of available houses rather than raising it.
     """
-    
-    # Just double checking for valid input 
-    if case.ev_active_power_profiles is None:            # ← guard first
+    validate_case(case)
+
+    if not 0 <= penetration_level <= 1:
+        raise ValueError("penetration_level must be between 0 and 1.")
+
+    if case.ev_active_power_profiles is None:
         raise ValueError("EV penetration analysis requires ev_active_power_profiles.")
 
-    # Random number generation, fixed seed reproduces the entire run (house selectrion AND profile assignment)
-    rng = np.random.default_rng(random_seed) 
+    # Just double checking for valid input
+    if case.ev_active_power_profiles is None:  # ← guard first
+        raise ValueError("EV penetration analysis requires ev_active_power_profiles.")
+
+    # Random number generation, fixed seed reproduces the entire run (house selection AND profile assignment)
+    rng = np.random.default_rng(random_seed)
 
     # Which houses belong to which feeder (assignment 1) - use helper function to determine membership
     feeder_to_houses = _houses_per_feeder(case)
 
-    # Find how many EVs per feeder (round_down of the spec formula) 
+    # Find how many EVs per feeder (round_down of the spec formula)
     n_houses = len(case.input_data[ComponentType.sym_load])
     n_feeders = len(case.lv_feeder_ids)
     evs_per_feeder = math.floor(penetration_level * n_houses / n_feeders)
@@ -74,11 +90,20 @@ def run_ev_penetration_analysis(
     # take all of them instead of letting rng.choice crash.
     selected_houses: list[int] = []
     for houses in feeder_to_houses.values():
-        k = min(evs_per_feeder, len(houses))               # clamp if feeder is small
+        k = min(evs_per_feeder, len(houses))  # clamp if feeder is small
         chosen = rng.choice(houses, size=k, replace=False)
         selected_houses.extend(int(h) for h in chosen)
-    
-    # Assign a unique EV profile to each selected house 
+
+    if not selected_houses:
+        processor = PowerFlowProcessor(
+            case.input_data,
+            case.active_power_profile,
+            case.reactive_power_profile,
+        )
+        processor.run_time_series()
+        return processor.get_voltage_summary(), processor.get_line_summary()
+
+    # Assign a unique EV profile to each selected house
     ev_pool = case.ev_active_power_profiles
     profile_columns = rng.choice(ev_pool.columns, size=len(selected_houses), replace=False)
 
@@ -86,7 +111,11 @@ def run_ev_penetration_analysis(
     # original data is never mutated. Reactive power is left untouched
     # because EV reactive power is zero per the spec.
     modified_active = case.active_power_profile.copy()
-    for house_id, profile_col in zip(selected_houses, profile_columns):
+    for house_id, profile_col in zip(
+        selected_houses,
+        profile_columns,
+        strict=True,
+    ):
         modified_active[house_id] += ev_pool[profile_col].to_numpy()
 
     # Run the time-series power flow (assignment 2) and return the
@@ -94,5 +123,3 @@ def run_ev_penetration_analysis(
     processor = PowerFlowProcessor(case.input_data, modified_active, case.reactive_power_profile)
     processor.run_time_series()
     return processor.get_voltage_summary(), processor.get_line_summary()
-
-  

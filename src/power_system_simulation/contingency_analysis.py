@@ -6,6 +6,7 @@ from power_grid_model import ComponentType
 from power_system_simulation.case import PowerSystemCase
 from power_system_simulation.grid_graph import build_graph_processor
 from power_system_simulation.power_flow_processing import PowerFlowProcessor
+from power_system_simulation.validation import validate_case
 
 N_MINUS_ONE_COLUMNS = [
     "Alternative_Line_ID",
@@ -63,6 +64,9 @@ def run_n_minus_one_analysis(
     and report the worst line loading. Returns one row per alternative, or an
     empty table if there are none.
     """
+
+    validate_case(case)
+
     lines = case.input_data[ComponentType.line]
 
     if disconnected_line_id not in set(lines["id"].tolist()):
